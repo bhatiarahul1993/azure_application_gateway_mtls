@@ -73,6 +73,11 @@ terraform destroy
 ```
 
 ---
+## Certificates
+
+- certificate.pfx is used in the application gateway listener
+- certificate.cer is installed in the Trusted root certificate in the user's system. (only required when you are using self signed certificate)
+- exported_certificate.cer is used in SSL profile of application gateway. 
 
 ## Notes
 
