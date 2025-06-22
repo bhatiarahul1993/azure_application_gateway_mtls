@@ -4,7 +4,7 @@ This repository demonstrates how to configure Azure Application Gateway with mut
 
 ## Repository Structure
 
-- `headers_app/` - Sample Node.js application for testing Application Gateway.
+- `headers_app/` - Sample Node.js application for testing mTLS and print X-headers in the web page.
   - `server.js` - Main server file.
   - `package.json` - Node.js dependencies and scripts.
   - `public/index.html` - Simple HTML page for testing.
@@ -20,12 +20,24 @@ This repository demonstrates how to configure Azure Application Gateway with mut
 ## Usage
 
 1. Deploy Azure resources using the Terraform files in the `terraform/` directory.
-2. Run the Node.js app in `headers_app/` to test mTLS authentication through the Application Gateway.
+2. Confugure windows server deployed via tterraform to run node application.
+3. Run the Node.js app in `headers_app/` to test mTLS authentication through the Application Gateway.
 
 ## Prerequisites
 - Azure account
 - Terraform
-- Node.js and npm
+- Node.js and npm (Install Node.JS and npm in windows server deplyoed via terraform)
+
+Steps:
+
+1. Deploy Azure resources via terraform code given in the repo. The code will deploy: Resource Group, Virtual Networks and Subnets, VNet Peering, Public IPs, Application Gateway, Windows Web Server, Load Balancer, NSG, etc.
+
+2. Login to Windows server
+
+3. Install node in windows server
+
+4. Run the Node.js app in `headers_app/` on port 3000 in windows server.
+
 
 ## License
 This repository is for demonstration purposes only. Update certificates and secrets before using.
