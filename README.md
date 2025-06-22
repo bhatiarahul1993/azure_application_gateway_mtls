@@ -30,7 +30,7 @@ This repository demonstrates how to configure Azure Application Gateway with mut
 
 Steps:
 
-1. Deploy Azure resources via terraform code given in the repo. The code will deploy: Resource Group, Virtual Networks and Subnets, VNet Peering, Public IPs, Application Gateway, Windows Web Server, Load Balancer, NSG, etc.
+1. Deploy Azure resources via terraform code given in the repo. The code will deploy: Resource Group, Virtual Networks and Subnets, VNet Peering, Public IPs, Application Gateway, Windows Web Server, Load Balancer, NSG, etc. (follow these manul steps after the app gateway deployement - go to listener and associate ssl-profile, go to rewrite rules and associate the routing rules)
 
 2. Login to Windows server
 
