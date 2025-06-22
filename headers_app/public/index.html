@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>X-Forwarded Headers Viewer</title>
+</head>
+<body>
+  <h2>X-Forwarded Headers</h2>
+  <pre id="output">Loading...</pre>
+
+  <script>
+    fetch('/headers')
+      .then(res => res.json())
+      .then(headers => {
+        const content = Object.entries(headers)
+          .map(([key, value]) => `${key}: ${value}`)
+          .join('\n');
+        document.getElementById('output').textContent = content;
+      })
+      .catch(err => {
+        document.getElementById('output').textContent = 'Error fetching headers: ' + err;
+      });
+  </script>
+</body>
+</html>
