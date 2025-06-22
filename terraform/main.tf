@@ -9,7 +9,7 @@ terraform {
 
 provider "azurerm" {
   features {}
-  subscription_id = "7b7e49fa-4e7f-4873-9be8-3ce6b4dc1caf"
+  subscription_id = "<Subscription-ID>" # Replace with your Azure subscription ID
 }
 
 resource "azurerm_resource_group" "main" {
