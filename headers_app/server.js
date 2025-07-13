@@ -6,7 +6,7 @@ app.use(express.static('public'));
 
 app.get('/headers', (req, res) => {
   const forwardedHeaders = Object.fromEntries(
-    Object.entries(req.headers).filter(([key]) => key.startsWith('x-forwarded'))
+    Object.entries(req.headers).filter(([key]) => key.startsWith('x-'))
   );
   res.json(forwardedHeaders);
 });

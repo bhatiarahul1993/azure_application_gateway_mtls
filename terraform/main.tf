@@ -9,7 +9,7 @@ terraform {
 
 provider "azurerm" {
   features {}
-  subscription_id = "7b7e49fa-4e7f-4873-9be8-3ce6b4dc1caf"
+  subscription_id = "<replace with your subscription ID>"
 }
 
 resource "azurerm_resource_group" "main" {
@@ -31,6 +31,13 @@ resource "azurerm_subnet" "appgw_subnet" {
   address_prefixes     = ["10.0.1.0/24"]
 }
 
+resource "azurerm_subnet" "firewall_subnet" {
+  name                 = "AzureFirewallSubnet"
+  resource_group_name  = azurerm_resource_group.main.name
+  virtual_network_name = azurerm_virtual_network.routable_vnet.name
+  address_prefixes     = ["10.0.3.0/24"]
+}
+
 resource "azurerm_subnet" "workload_subnet" {
   name                 = "workload-subnet"
   resource_group_name  = azurerm_resource_group.main.name
@@ -50,6 +57,67 @@ resource "azurerm_subnet" "app_subnet" {
   resource_group_name  = azurerm_resource_group.main.name
   virtual_network_name = azurerm_virtual_network.internal_vnet.name
   address_prefixes     = ["172.16.0.0/24"]
+}
+
+resource "azurerm_subnet" "aks_subnet" {
+  name                 = "aks-subnet"
+  resource_group_name  = azurerm_resource_group.main.name
+  virtual_network_name = azurerm_virtual_network.internal_vnet.name
+  address_prefixes     = ["172.16.1.0/24"]
+}
+
+resource "azurerm_public_ip" "firewall_public_ip" {
+  name                = "appgwpoc-firewall-pip"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  allocation_method   = "Static"
+  sku                 = "Standard"
+}
+
+resource "azurerm_firewall_policy" "main" {
+  name                = "appgwpoc-firewall-policy"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  sku                 = "Standard"
+}
+
+resource "azurerm_firewall_policy_rule_collection_group" "main" {
+  name               = "example-fwpolicy-rcg"
+  firewall_policy_id = azurerm_firewall_policy.main.id
+  priority           = 500
+
+  nat_rule_collection {
+    name     = "nat_rule_collection1"
+    priority = 300
+    action   = "Dnat"
+    rule {
+      name                = "nat_rule_collection1_rule1"
+      protocols           = ["TCP", "UDP"]
+      source_addresses    = ["*"]
+      destination_address = "172.210.173.193"
+      destination_ports   = ["443"]
+      translated_address  = "10.0.1.14"
+      translated_port     = "443"
+    }
+  }
+}
+
+
+resource "azurerm_firewall" "main" {
+  name                = "appgwpoc-firewall"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+
+  sku_name = "AZFW_VNet"
+  sku_tier = "Standard"
+
+  ip_configuration {
+    name                 = "configuration"
+    subnet_id            = azurerm_subnet.firewall_subnet.id
+    public_ip_address_id = azurerm_public_ip.firewall_public_ip.id
+  }
+
+  firewall_policy_id = azurerm_firewall_policy.main.id
 }
 
 resource "azurerm_public_ip" "appgw_public_ip" {
@@ -86,6 +154,13 @@ resource "azurerm_application_gateway" "appgw" {
     public_ip_address_id = azurerm_public_ip.appgw_public_ip.id
   }
 
+  frontend_ip_configuration {
+    name                          = "appgw-fe-private-ip"
+    subnet_id                     = azurerm_subnet.appgw_subnet.id
+    private_ip_address_allocation = "Static"
+    private_ip_address            = "10.0.1.14" # Choose an unused IP in appgw-subnet
+  }
+
   ssl_certificate {
     name     = "appgw-ssl-cert"
     data     = filebase64("/certificate.pfx") // Replace with your certificate path
@@ -94,23 +169,24 @@ resource "azurerm_application_gateway" "appgw" {
 
   backend_address_pool {
     name = "appgw-backend-pool"
-    ip_addresses = ["172.16.0.4"]
+    ip_addresses = ["172.16.1.66"]
   }
 
   backend_http_settings {
     name                  = "appgw-backend-http-settings"
-    port                  = 3000
+    port                  = 80
     protocol              = "Http"
     cookie_based_affinity = "Disabled"
-    pick_host_name_from_backend_address = false
+    pick_host_name_from_backend_address = false  
   }
 
   http_listener {
     name                           = "appgw-https-listener"
-    frontend_ip_configuration_name = "appgw-fe-ip"
+    frontend_ip_configuration_name = "appgw-fe-private-ip"
     frontend_port_name             = "https-port"
     protocol                       = "Https"
     ssl_certificate_name           = "appgw-ssl-cert"
+    ssl_profile_name               = "appgw-ssl-profile"
   }
 
   # Add a rewrite rule set to add a custom header
@@ -189,6 +265,10 @@ resource "azurerm_windows_virtual_machine" "windows_web_server" {
     offer     = "WindowsServer"
     sku       = "2019-Datacenter"
     version   = "latest"
+  }
+
+  identity {
+    type = "SystemAssigned"
   }
 
   computer_name  = "winweb"
@@ -287,4 +367,48 @@ resource "azurerm_network_security_group" "app_nsg" {
 resource "azurerm_subnet_network_security_group_association" "workload_subnet_nsg_assoc" {
   subnet_id                 = azurerm_subnet.app_subnet.id
   network_security_group_id = azurerm_network_security_group.app_nsg.id
+}
+
+resource "azurerm_kubernetes_cluster" "aks" {
+  name                = "appgwpoc-aks"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  dns_prefix          = "appgwpocaks"
+
+  default_node_pool {
+    name       = "nodepool1"
+    node_count = 1
+    vm_size    = "Standard_DS2_v2"
+    vnet_subnet_id = azurerm_subnet.aks_subnet.id
+  }
+
+  private_cluster_enabled = true
+
+  identity {
+    type = "SystemAssigned"
+  }
+
+  network_profile {
+    network_plugin    = "azure"
+    dns_service_ip    = "10.2.0.10"
+    service_cidr      = "10.2.0.0/16"
+    outbound_type     = "loadBalancer"
+  }
+
+  kubernetes_version = "1.31" # You can update to the latest supported version
+
+  tags = {
+    environment = "dev"
+  }
+}
+
+resource "azurerm_kubernetes_cluster_node_pool" "app" {
+  name                  = "internal"
+  kubernetes_cluster_id = azurerm_kubernetes_cluster.aks.id
+  vm_size               = "Standard_DS2_v2"
+  node_count            = 1
+  vnet_subnet_id = azurerm_subnet.aks_subnet.id
+  tags = {
+    Environment = "dev"
+  }
 }
